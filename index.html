@@ -41,20 +41,23 @@
     <!-- Main Container (좌우 분할 레이아웃) -->
     <main class="max-w-[1800px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col lg:flex-row gap-6 flex-grow">
         
-        <!-- 좌측 사이드바: 1. 계좌현황(누적) -->
-        <aside class="w-full lg:w-72 xl:w-80 flex-shrink-0 flex flex-col gap-4">
+        <!-- 좌측 사이드바: 1. 계좌현황(누적) - 너비를 텍스트 길이에 딱 맞춤 (w-max) -->
+        <aside class="w-full lg:w-max flex-shrink-0 flex flex-col gap-4">
             <h2 class="text-lg font-bold text-slate-800 flex items-center">
                 <span class="w-2 h-6 bg-indigo-600 rounded-full mr-2"></span>
-                계좌현황 요약 (누적)
+                계좌 현황 요약
             </h2>
-            <div class="flex flex-col gap-4">
+            <div class="flex flex-col gap-4 w-max">
                 <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                     <p class="text-sm font-medium text-slate-500">총 원금</p>
                     <p id="val-principal" class="text-2xl font-bold text-slate-900 mt-2 text-slate-400">데이터 로딩중...</p>
                 </div>
                 <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                     <p class="text-sm font-medium text-slate-500">총 자산</p>
-                    <p id="val-total-asset" class="text-2xl font-bold text-indigo-600 mt-2 text-slate-400">데이터 로딩중...</p>
+                    <div class="flex items-baseline gap-2 mt-2 whitespace-nowrap">
+                        <p id="val-total-asset" class="text-2xl font-bold text-indigo-600 text-slate-400">데이터 로딩중...</p>
+                        <p id="val-asset-change" class="text-2xl font-bold"></p>
+                    </div>
                 </div>
                 <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                     <p class="text-sm font-medium text-slate-500">총 평가 수익</p>
@@ -135,30 +138,36 @@
             id: 'centerText',
             beforeDraw(chart) {
                 if (chart.config.type === 'doughnut') {
-                    const { width, height, ctx } = chart;
-                    ctx.restore();
-                    const fontSize = (height / 114).toFixed(2);
-                    ctx.textBaseline = 'middle';
+                    const { ctx } = chart;
+                    
+                    const meta = chart.getDatasetMeta(0);
+                    if (!meta || !meta.data || meta.data.length === 0) return;
+                    
+                    // 캔버스 중앙이 아닌 도넛(그래프)의 실제 중앙 좌표 추출
+                    const centerX = meta.data[0].x;
+                    const centerY = meta.data[0].y;
 
                     const totalSum = chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
-                    
-                    // 총합계가 0이면 표시 안함 (로딩전)
                     if(totalSum <= 0) return;
 
                     const text1 = "자산 합계";
                     const text2 = fmt(totalSum) + "원";
 
+                    ctx.restore();
+                    ctx.textBaseline = 'middle';
+
                     // 상단 텍스트 (자산 합계)
                     ctx.font = `600 13px Pretendard, sans-serif`;
                     ctx.fillStyle = '#64748b';
-                    const text1Ctx = ctx.measureText(text1);
-                    ctx.fillText(text1, width / 2 - text1Ctx.width / 2, height / 2 - 14);
+                    const text1Width = ctx.measureText(text1).width;
+                    ctx.fillText(text1, centerX - text1Width / 2, centerY - 14);
 
                     // 하단 텍스트 (총 금액)
                     ctx.font = `bold 18px Pretendard, sans-serif`;
                     ctx.fillStyle = '#0f172a';
-                    const text2Ctx = ctx.measureText(text2);
-                    ctx.fillText(text2, width / 2 - text2Ctx.width / 2, height / 2 + 10);
+                    const text2Width = ctx.measureText(text2).width;
+                    ctx.fillText(text2, centerX - text2Width / 2, centerY + 10);
+                    
                     ctx.save();
                 }
             }
@@ -246,7 +255,7 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    cutout: '65%',
+                    cutout: '75%', // 긴 숫자가 원 안에 온전히 들어가도록 여유 공간 대폭 확대
                     plugins: {
                         legend: { position: 'right', labels: { boxWidth: 10, font: { size: 11 } } },
                         tooltip: {
@@ -326,7 +335,6 @@
             allocation: "https://docs.google.com/spreadsheets/d/e/2PACX-1vTd6FRstXsX_mzilVwwOHiGOrdLSzpqRh1J8dG1hdNhMGlnlZ7QpXY2pG3IVyobLCD-6V1AWv2WHO01/pub?gid=1230304129&single=true&output=csv"
         };
 
-        // isRaw 파라미터를 추가하여 도넛차트용 텍스트 처리를 분리
         async function fetchAndParseCSV(url, name, isRaw = false) {
             const noCacheUrl = url + "&_t=" + Date.now();
             try {
@@ -379,7 +387,7 @@
                 updateSummaryCards({ principal: 0, asset: 0, profit: 0, rate: 0 });
             }
 
-            // 2. 자산기록 파싱
+            // 2. 자산기록 파싱 (및 전일 대비 증감율 계산)
             const astData = await fetchAndParseCSV(CSV_URLS.asset, "자산기록");
             if (astData && astData.length > 0) {
                 const validData = astData.filter(d => d['날짜'] && d['자산총액']);
@@ -407,6 +415,27 @@
 
                     assetChart.options.scales.y.max = finalMax;
                     assetChart.update();
+
+                    // 전일 대비 증감율 계산 로직
+                    if (assetDataArray.length >= 2) {
+                        const currentAsset = assetDataArray[assetDataArray.length - 1];
+                        const previousAsset = assetDataArray[assetDataArray.length - 2];
+                        const changeEl = document.getElementById('val-asset-change');
+                        
+                        if (previousAsset > 0) {
+                            const changeRate = ((currentAsset - previousAsset) / previousAsset) * 100;
+                            if (changeRate > 0) {
+                                changeEl.innerText = `(+${changeRate.toFixed(2)}%)`;
+                                changeEl.className = 'text-2xl font-bold text-red-500'; // 상승 시 빨간색
+                            } else if (changeRate < 0) {
+                                changeEl.innerText = `(${changeRate.toFixed(2)}%)`;
+                                changeEl.className = 'text-2xl font-bold text-blue-500'; // 하락 시 파란색
+                            } else {
+                                changeEl.innerText = `(0.00%)`;
+                                changeEl.className = 'text-2xl font-bold text-slate-400';
+                            }
+                        }
+                    }
                 }
             }
 
@@ -451,7 +480,7 @@
                 }
             }
 
-            // 5. 종목현황 자산 비중 (도넛 차트) 파싱 - 빈줄 무시 및 헤더 동적 탐색 추가
+            // 5. 종목현황 자산 비중 (도넛 차트) 파싱
             const allocRawText = await fetchAndParseCSV(CSV_URLS.allocation, "종목현황", true);
             if (allocRawText) {
                 Papa.parse(allocRawText, {
@@ -462,7 +491,6 @@
                         let headerIdx = -1;
                         let nameCol = -1, amountCol = -1, ratioCol = -1;
 
-                        // 헤더 위치 동적 탐색 (상단 빈 줄이나 설명글 무시하고 '종목명' 찾기)
                         for (let i = 0; i < Math.min(20, rows.length); i++) {
                             for (let j = 0; j < rows[i].length; j++) {
                                 const val = String(rows[i][j]).replace(/[^\w가-힣]/g, '');
@@ -473,17 +501,14 @@
                             if (headerIdx !== -1) break;
                         }
 
-                        // 헤더를 성공적으로 찾았다면 데이터 파싱
                         if (headerIdx !== -1 && nameCol !== -1) {
                             const parsedAllocData = [];
                             
-                            // 헤더 다음 줄부터(보통 병합셀이 있으면 +2일 수도 있으나 전체 반복으로 걸러냄)
                             for (let i = headerIdx + 1; i < rows.length; i++) {
                                 const row = rows[i];
                                 if (!row || row.length <= nameCol) continue;
 
                                 const ticker = String(row[nameCol]).trim();
-                                // 빈칸이거나 헤더 이름과 동일하면 무시
                                 if (!ticker || ticker === '종목명') continue;
 
                                 let ratio = parseFloat(String(row[ratioCol]).replace(/[^0-9.-]/g, ''));
@@ -494,7 +519,6 @@
                             }
 
                             if (parsedAllocData.length > 0) {
-                                // 금액(amount) 기준으로 내림차순 정렬
                                 parsedAllocData.sort((a, b) => b.amount - a.amount);
                                 
                                 allocationChart.data.labels = parsedAllocData.map(d => d.ticker);
