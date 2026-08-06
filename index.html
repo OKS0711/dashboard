@@ -38,7 +38,7 @@
         </div>
     </header>
 
-    <!-- Main Container (좌우 분할 레이아웃 적용) -->
+    <!-- Main Container (좌우 분할 레이아웃) -->
     <main class="max-w-[1800px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col lg:flex-row gap-6 flex-grow">
         
         <!-- 좌측 사이드바: 1. 계좌현황(누적) -->
@@ -69,13 +69,12 @@
 
         <!-- 우측 메인 영역: 차트 그룹 -->
         <div class="flex-grow flex flex-col gap-6 min-w-0">
-            <!-- 2. 자산기록 추이 (가로로 넓게 배치) -->
+            <!-- 2. 자산기록 추이 -->
             <section class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
                 <h2 class="text-lg font-bold text-slate-800 flex items-center mb-6">
                     <span class="w-2 h-6 bg-indigo-600 rounded-full mr-2"></span>
                     원금 및 자산총액 추이 비교
                 </h2>
-                <!-- 높이를 약간 키워 추이를 더 선명하게 표시 -->
                 <div class="relative h-[350px] w-full flex-grow">
                     <canvas id="assetChart"></canvas>
                 </div>
@@ -142,6 +141,10 @@
                     ctx.textBaseline = 'middle';
 
                     const totalSum = chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
+                    
+                    // 총합계가 0이면 표시 안함 (로딩전)
+                    if(totalSum <= 0) return;
+
                     const text1 = "자산 합계";
                     const text2 = fmt(totalSum) + "원";
 
@@ -323,19 +326,20 @@
             allocation: "https://docs.google.com/spreadsheets/d/e/2PACX-1vTd6FRstXsX_mzilVwwOHiGOrdLSzpqRh1J8dG1hdNhMGlnlZ7QpXY2pG3IVyobLCD-6V1AWv2WHO01/pub?gid=1230304129&single=true&output=csv"
         };
 
-        async function fetchAndParseCSV(url, name) {
+        // isRaw 파라미터를 추가하여 도넛차트용 텍스트 처리를 분리
+        async function fetchAndParseCSV(url, name, isRaw = false) {
             const noCacheUrl = url + "&_t=" + Date.now();
             try {
                 let response = await fetch(noCacheUrl);
                 if (!response.ok) throw new Error("Direct fetch failed");
                 let text = await response.text();
-                return parseTextToJSON(text);
+                return isRaw ? text : parseTextToJSON(text);
             } catch (error) {
                 try {
                     let proxyUrl = "https://api.allorigins.win/raw?url=" + encodeURIComponent(noCacheUrl);
                     let proxyResponse = await fetch(proxyUrl);
                     let proxyText = await proxyResponse.text();
-                    return parseTextToJSON(proxyText);
+                    return isRaw ? proxyText : parseTextToJSON(proxyText);
                 } catch (proxyError) {
                     console.error(`[${name}] 데이터 로드 실패:`, proxyError);
                     return null;
@@ -447,29 +451,61 @@
                 }
             }
 
-            // 5. 종목현황 자산 비중 (도넛 차트) 파싱
-            const allocData = await fetchAndParseCSV(CSV_URLS.allocation, "종목현황");
-            if (allocData && allocData.length > 0) {
-                const parsedAllocData = allocData.map(d => {
-                    const ticker = (d['종목명'] || '').trim();
-                    if (!ticker || ticker === '종목명') return null;
+            // 5. 종목현황 자산 비중 (도넛 차트) 파싱 - 빈줄 무시 및 헤더 동적 탐색 추가
+            const allocRawText = await fetchAndParseCSV(CSV_URLS.allocation, "종목현황", true);
+            if (allocRawText) {
+                Papa.parse(allocRawText, {
+                    header: false,
+                    skipEmptyLines: true,
+                    complete: function(results) {
+                        const rows = results.data;
+                        let headerIdx = -1;
+                        let nameCol = -1, amountCol = -1, ratioCol = -1;
 
-                    let ratio = parseFloat(String(d['투자비중']).replace(/[^0-9.-]/g, ''));
-                    let amount = cleanNum(d['평가액원화'] || d['평가액']);
+                        // 헤더 위치 동적 탐색 (상단 빈 줄이나 설명글 무시하고 '종목명' 찾기)
+                        for (let i = 0; i < Math.min(20, rows.length); i++) {
+                            for (let j = 0; j < rows[i].length; j++) {
+                                const val = String(rows[i][j]).replace(/[^\w가-힣]/g, '');
+                                if (val === '종목명') { headerIdx = i; nameCol = j; }
+                                if (val.includes('평가액')) { amountCol = j; }
+                                if (val.includes('투자비중')) { ratioCol = j; }
+                            }
+                            if (headerIdx !== -1) break;
+                        }
 
-                    if (isNaN(ratio) || amount <= 0) return null;
-                    return { ticker, amount, ratio };
-                }).filter(Boolean);
+                        // 헤더를 성공적으로 찾았다면 데이터 파싱
+                        if (headerIdx !== -1 && nameCol !== -1) {
+                            const parsedAllocData = [];
+                            
+                            // 헤더 다음 줄부터(보통 병합셀이 있으면 +2일 수도 있으나 전체 반복으로 걸러냄)
+                            for (let i = headerIdx + 1; i < rows.length; i++) {
+                                const row = rows[i];
+                                if (!row || row.length <= nameCol) continue;
 
-                if (parsedAllocData.length > 0) {
-                    parsedAllocData.sort((a, b) => b.amount - a.amount);
-                    
-                    allocationChart.data.labels = parsedAllocData.map(d => d.ticker);
-                    allocationChart.data.datasets[0].data = parsedAllocData.map(d => d.amount);
-                    allocationChart.data.datasets[0].ratios = parsedAllocData.map(d => d.ratio);
+                                const ticker = String(row[nameCol]).trim();
+                                // 빈칸이거나 헤더 이름과 동일하면 무시
+                                if (!ticker || ticker === '종목명') continue;
 
-                    allocationChart.update();
-                }
+                                let ratio = parseFloat(String(row[ratioCol]).replace(/[^0-9.-]/g, ''));
+                                let amount = cleanNum(row[amountCol]);
+
+                                if (isNaN(ratio) || amount <= 0) continue;
+                                parsedAllocData.push({ ticker, amount, ratio });
+                            }
+
+                            if (parsedAllocData.length > 0) {
+                                // 금액(amount) 기준으로 내림차순 정렬
+                                parsedAllocData.sort((a, b) => b.amount - a.amount);
+                                
+                                allocationChart.data.labels = parsedAllocData.map(d => d.ticker);
+                                allocationChart.data.datasets[0].data = parsedAllocData.map(d => d.amount);
+                                allocationChart.data.datasets[0].ratios = parsedAllocData.map(d => d.ratio);
+
+                                allocationChart.update();
+                            }
+                        }
+                    }
+                });
             }
         }
 
