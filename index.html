@@ -138,7 +138,9 @@
                     maintainAspectRatio: false, 
                     interaction: { mode: 'index', intersect: false },
                     scales: {
-                        x: { grid: { display: false } },
+                        x: { 
+                            grid: { display: false } 
+                        },
                         y: {
                             min: 200000000,
                             grid: { display: false },
@@ -151,22 +153,47 @@
                 }
             });
 
+            // 월별 배당금 차트 (눈금선 삭제 및 최대값 +20% 여유공간 설정)
             const ctx2 = document.getElementById('dividendMonthlyChart').getContext('2d');
             monthlyChart = new Chart(ctx2, {
                 type: 'bar',
                 data: { labels: [], datasets: [{ label: '배당금 (원)', data: [], backgroundColor: '#10b981', borderRadius: 4 }] },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { display: false } },
+                        y: { 
+                            grid: { display: false },
+                            grace: '20%' // 최댓값 기준 +20% 여유 공간 확보
+                        }
+                    }
+                }
             });
 
+            // 종목별 배당금 추이 차트 (눈금선 삭제 및 최대값 +20% 여유공간 설정)
             const ctx3 = document.getElementById('dividendTickerChart').getContext('2d');
             tickerChart = new Chart(ctx3, {
                 type: 'bar',
                 data: { labels: [], datasets: [{ label: '배당금', data: [], backgroundColor: '#0ea5e9', borderRadius: 4 }] },
-                options: { responsive: true, maintainAspectRatio: false }
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { grid: { display: false } },
+                        y: { 
+                            grid: { display: false },
+                            grace: '20%' // 최댓값 기준 +20% 여유 공간 확보
+                        }
+                    }
+                }
             });
         }
 
         let rawTickerData = [];
+        let rawMonthlyData = []; // 월별 데이터 저장용 배열 추가
+
         function updateTickerChartData(data) {
             rawTickerData = data;
             const tickers = [...new Set(data.map(d => d.ticker))].filter(Boolean);
@@ -204,6 +231,8 @@
             tickerChart.data.labels = allDates;
             tickerChart.data.datasets[0].label = targetTicker === 'ALL' ? '합산 배당금' : `${targetTicker} 배당금`;
             tickerChart.data.datasets[0].data = allDates.map(date => aggregated[date] || 0);
+            
+            // 전체 종목 합산일 때와 개별 종목일 때 색상 구분
             tickerChart.data.datasets[0].backgroundColor = targetTicker === 'ALL' ? '#0ea5e9' : '#8b5cf6';
             tickerChart.update();
         }
@@ -219,7 +248,6 @@
         };
 
         async function fetchAndParseCSV(url, name) {
-            // 주소 뒤에 현재 시각(_t)을 붙여 브라우저 캐시를 완전히 무력화하고 즉시 최신본을 가져옴
             const noCacheUrl = url + "&_t=" + Date.now();
             try {
                 let response = await fetch(noCacheUrl);
