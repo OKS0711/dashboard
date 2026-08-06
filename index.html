@@ -52,17 +52,23 @@
                     <p class="text-sm font-medium text-slate-500">총 원금</p>
                     <p id="val-principal" class="text-2xl font-bold text-slate-900 mt-2 text-slate-400">데이터 로딩중...</p>
                 </div>
+                
                 <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                    <p class="text-sm font-medium text-slate-500">총 자산</p>
-                    <div class="flex items-baseline gap-2 mt-2 whitespace-nowrap">
-                        <p id="val-total-asset" class="text-2xl font-bold text-indigo-600 text-slate-400">데이터 로딩중...</p>
-                        <p id="val-asset-change" class="text-2xl font-bold"></p>
+                    <div class="flex items-center gap-2">
+                        <p class="text-sm font-medium text-slate-500">총 자산</p>
+                        <p id="val-asset-change" class="text-sm font-bold"></p>
                     </div>
+                    <p id="val-total-asset" class="text-2xl font-bold text-indigo-600 mt-2 text-slate-400">데이터 로딩중...</p>
                 </div>
+                
                 <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                    <p class="text-sm font-medium text-slate-500">총 평가 수익</p>
+                    <div class="flex items-center gap-2">
+                        <p class="text-sm font-medium text-slate-500">총 평가 수익</p>
+                        <p id="val-profit-change" class="text-sm font-bold"></p>
+                    </div>
                     <p id="val-profit" class="text-2xl font-bold text-emerald-600 mt-2 text-slate-400">데이터 로딩중...</p>
                 </div>
+                
                 <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                     <p class="text-sm font-medium text-slate-500">누적 수익률</p>
                     <p id="val-return" class="text-2xl font-bold text-emerald-600 mt-2 text-slate-400">데이터 로딩중...</p>
@@ -88,7 +94,7 @@
                 <!-- 월별 배당금 -->
                 <section class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
                     <h2 class="text-lg font-bold text-slate-800 flex items-center mb-6">
-                        <span class="w-2 h-6 bg-emerald-500 rounded-full mr-2"></span>월별 배당금
+                        <span class="w-2 h-6 bg-emerald-500 rounded-full mr-2"></span>배당금 (월별)
                     </h2>
                     <div class="relative h-[280px] w-full flex-grow">
                         <canvas id="dividendMonthlyChart"></canvas>
@@ -99,7 +105,7 @@
                 <section class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
                     <div class="flex items-center justify-between mb-6">
                         <h2 class="text-lg font-bold text-slate-800 flex items-center">
-                            <span class="w-2 h-6 bg-sky-500 rounded-full mr-2"></span>종목별 배당금 추이
+                            <span class="w-2 h-6 bg-sky-500 rounded-full mr-2"></span>배당금 (종목별)
                         </h2>
                         <select id="tickerFilter" class="bg-slate-50 border border-slate-300 text-sm rounded-xl px-3 py-1 font-medium focus:ring-indigo-500 focus:border-indigo-500">
                             <option value="ALL">전체 합산</option>
@@ -387,7 +393,7 @@
                 updateSummaryCards({ principal: 0, asset: 0, profit: 0, rate: 0 });
             }
 
-            // 2. 자산기록 파싱 (및 전일 대비 증감율 계산)
+            // 2. 자산기록 파싱 (및 전일 대비 증감 계산)
             const astData = await fetchAndParseCSV(CSV_URLS.asset, "자산기록");
             if (astData && astData.length > 0) {
                 const validData = astData.filter(d => d['날짜'] && d['자산총액']);
@@ -416,24 +422,46 @@
                     assetChart.options.scales.y.max = finalMax;
                     assetChart.update();
 
-                    // 전일 대비 증감율 계산 로직
-                    if (assetDataArray.length >= 2) {
+                    // 전일 대비 증감 계산 로직
+                    if (assetDataArray.length >= 2 && principalDataArray.length >= 2) {
                         const currentAsset = assetDataArray[assetDataArray.length - 1];
                         const previousAsset = assetDataArray[assetDataArray.length - 2];
-                        const changeEl = document.getElementById('val-asset-change');
                         
+                        const currentPrincipal = principalDataArray[principalDataArray.length - 1];
+                        const previousPrincipal = principalDataArray[principalDataArray.length - 2];
+                        
+                        const currentProfit = currentAsset - currentPrincipal;
+                        const previousProfit = previousAsset - previousPrincipal;
+
+                        // 총 자산 증감률 (%)
+                        const assetChangeEl = document.getElementById('val-asset-change');
                         if (previousAsset > 0) {
                             const changeRate = ((currentAsset - previousAsset) / previousAsset) * 100;
                             if (changeRate > 0) {
-                                changeEl.innerText = `(+${changeRate.toFixed(2)}%)`;
-                                changeEl.className = 'text-2xl font-bold text-red-500'; // 상승 시 빨간색
+                                assetChangeEl.innerText = `(+${changeRate.toFixed(2)}%)`;
+                                assetChangeEl.className = 'text-sm font-bold text-red-500';
                             } else if (changeRate < 0) {
-                                changeEl.innerText = `(${changeRate.toFixed(2)}%)`;
-                                changeEl.className = 'text-2xl font-bold text-blue-500'; // 하락 시 파란색
+                                assetChangeEl.innerText = `(${changeRate.toFixed(2)}%)`;
+                                assetChangeEl.className = 'text-sm font-bold text-blue-500';
                             } else {
-                                changeEl.innerText = `(0.00%)`;
-                                changeEl.className = 'text-2xl font-bold text-slate-400';
+                                assetChangeEl.innerText = `(0.00%)`;
+                                assetChangeEl.className = 'text-sm font-bold text-slate-400';
                             }
+                        }
+
+                        // 총 평가 수익 증감액 (원)
+                        const profitChangeEl = document.getElementById('val-profit-change');
+                        const profitChangeAmt = currentProfit - previousProfit;
+                        
+                        if (profitChangeAmt > 0) {
+                            profitChangeEl.innerText = `(+${fmt(profitChangeAmt)}원)`;
+                            profitChangeEl.className = 'text-sm font-bold text-red-500';
+                        } else if (profitChangeAmt < 0) {
+                            profitChangeEl.innerText = `(-${fmt(Math.abs(profitChangeAmt))}원)`;
+                            profitChangeEl.className = 'text-sm font-bold text-blue-500';
+                        } else {
+                            profitChangeEl.innerText = `(0원)`;
+                            profitChangeEl.className = 'text-sm font-bold text-slate-400';
                         }
                     }
                 }
