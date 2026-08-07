@@ -279,7 +279,7 @@
                             font: { weight: 'bold', size: 10 },
                             formatter: (value, context) => {
                                 const ratio = context.dataset.ratios[context.dataIndex];
-                                return ratio >= 3 ? ratio + '%' : ''; // 3% 미만은 텍스트 숨김 (겹침 방지)
+                                return ratio >= 3 ? ratio + '%' : ''; 
                             }
                         }
                     }
@@ -400,7 +400,7 @@
                 updateSummaryCards({ principal: 0, asset: 0, profit: 0, rate: 0 });
             }
 
-            // 2. 자산기록 파싱 (및 실시간 데이터 대비 증감 계산)
+            // 2. 자산기록 파싱 (및 날짜 기반 전일 대비 증감 계산)
             const astData = await fetchAndParseCSV(CSV_URLS.asset, "자산기록");
             if (astData && astData.length > 0) {
                 const validData = astData.filter(d => d['날짜'] && d['자산총액']);
@@ -429,42 +429,73 @@
                     assetChart.options.scales.y.max = finalMax;
                     assetChart.update();
 
-                    // 전일(자산기록의 마지막 행) 대비 금일(계좌현황 실시간) 증감 계산 로직
-                    if (assetDataArray.length >= 1 && principalDataArray.length >= 1) {
-                        const previousAsset = assetDataArray[assetDataArray.length - 1];
-                        const previousPrincipal = principalDataArray[principalDataArray.length - 1];
-                        const previousProfit = previousAsset - previousPrincipal;
+                    // 날짜를 기준으로 오늘 이전의 가장 최근 데이터(전일) 찾기 로직
+                    let previousAsset = 0;
+                    let previousPrincipal = 0;
+                    let foundPrevious = false;
 
-                        // 총 자산 증감률 (%) : (금일 실시간 총자산 - 전일 자산총액) / 전일 자산총액 * 100
-                        const assetChangeEl = document.getElementById('val-asset-change');
-                        if (previousAsset > 0) {
-                            const changeRate = ((liveAsset - previousAsset) / previousAsset) * 100;
-                            if (changeRate > 0) {
-                                assetChangeEl.innerText = `(+${changeRate.toFixed(2)}%)`;
-                                assetChangeEl.className = 'text-sm font-bold text-red-500';
-                            } else if (changeRate < 0) {
-                                assetChangeEl.innerText = `(${changeRate.toFixed(2)}%)`;
-                                assetChangeEl.className = 'text-sm font-bold text-blue-500';
-                            } else {
-                                assetChangeEl.innerText = `(0.00%)`;
-                                assetChangeEl.className = 'text-sm font-bold text-slate-400';
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+
+                    for (let i = validData.length - 1; i >= 0; i--) {
+                        // 공백 제거 후 날짜 포맷 (YYYY.MM.DD 등) 추출
+                        const dStr = String(validData[i]['날짜']).replace(/\s+/g, '');
+                        const match = dStr.match(/(\d{4})[.\-\/]+(\d{1,2})[.\-\/]+(\d{1,2})/);
+                        
+                        if (match) {
+                            const rowDate = new Date(parseInt(match[1], 10), parseInt(match[2], 10) - 1, parseInt(match[3], 10));
+                            // 오늘 날짜보다 무조건 과거인 가장 마지막 행을 찾음
+                            if (rowDate.getTime() < today.getTime()) {
+                                previousAsset = cleanNum(validData[i]['자산총액']);
+                                previousPrincipal = cleanNum(validData[i]['원금']);
+                                foundPrevious = true;
+                                break;
                             }
                         }
+                    }
 
-                        // 총 평가 수익 증감액 (원) : 금일 실시간 총수익 - 전일 총수익(자산총액 - 원금)
-                        const profitChangeEl = document.getElementById('val-profit-change');
-                        const profitChangeAmt = liveProfit - previousProfit;
-                        
-                        if (profitChangeAmt > 0) {
-                            profitChangeEl.innerText = `(+${fmt(profitChangeAmt)}원)`;
-                            profitChangeEl.className = 'text-sm font-bold text-red-500';
-                        } else if (profitChangeAmt < 0) {
-                            profitChangeEl.innerText = `(-${fmt(Math.abs(profitChangeAmt))}원)`;
-                            profitChangeEl.className = 'text-sm font-bold text-blue-500';
-                        } else {
-                            profitChangeEl.innerText = `(0원)`;
-                            profitChangeEl.className = 'text-sm font-bold text-slate-400';
+                    // 예외 처리: 날짜 파싱 실패 등으로 못 찾았을 경우 안전하게 배열의 끝에서 두 번째 값 사용
+                    if (!foundPrevious) {
+                        if (validData.length >= 2) {
+                            previousAsset = cleanNum(validData[validData.length - 2]['자산총액']);
+                            previousPrincipal = cleanNum(validData[validData.length - 2]['원금']);
+                        } else if (validData.length === 1) {
+                            previousAsset = cleanNum(validData[0]['자산총액']);
+                            previousPrincipal = cleanNum(validData[0]['원금']);
                         }
+                    }
+
+                    const previousProfit = previousAsset - previousPrincipal;
+
+                    // 총 자산 증감률 (%) : (금일 실시간 총자산 - 자산기록 전일 총자산) / 자산기록 전일 총자산 * 100
+                    const assetChangeEl = document.getElementById('val-asset-change');
+                    if (previousAsset > 0) {
+                        const changeRate = ((liveAsset - previousAsset) / previousAsset) * 100;
+                        if (changeRate > 0) {
+                            assetChangeEl.innerText = `(+${changeRate.toFixed(2)}%)`;
+                            assetChangeEl.className = 'text-sm font-bold text-red-500';
+                        } else if (changeRate < 0) {
+                            assetChangeEl.innerText = `(${changeRate.toFixed(2)}%)`;
+                            assetChangeEl.className = 'text-sm font-bold text-blue-500';
+                        } else {
+                            assetChangeEl.innerText = `(0.00%)`;
+                            assetChangeEl.className = 'text-sm font-bold text-slate-400';
+                        }
+                    }
+
+                    // 총 평가 수익 증감액 (원) : 금일 실시간 총수익 - 자산기록 전일 총수익(자산총액 - 원금)
+                    const profitChangeEl = document.getElementById('val-profit-change');
+                    const profitChangeAmt = liveProfit - previousProfit;
+                    
+                    if (profitChangeAmt > 0) {
+                        profitChangeEl.innerText = `(+${fmt(profitChangeAmt)}원)`;
+                        profitChangeEl.className = 'text-sm font-bold text-red-500';
+                    } else if (profitChangeAmt < 0) {
+                        profitChangeEl.innerText = `(-${fmt(Math.abs(profitChangeAmt))}원)`;
+                        profitChangeEl.className = 'text-sm font-bold text-blue-500';
+                    } else {
+                        profitChangeEl.innerText = `(0원)`;
+                        profitChangeEl.className = 'text-sm font-bold text-slate-400';
                     }
                 }
             }
