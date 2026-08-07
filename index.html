@@ -38,7 +38,7 @@
         </div>
     </header>
 
-    <!-- Main Container (스마트폰 가로모드 md 해상도부터 좌우 분할 적용) -->
+    <!-- Main Container (좌우 분할 레이아웃) -->
     <main class="max-w-[1800px] w-full mx-auto px-4 sm:px-6 md:px-8 py-6 flex flex-col md:flex-row gap-6 flex-grow">
         
         <!-- 좌측 사이드바: 1. 계좌현황(누적) - 스마트폰 가로에서부터 너비를 텍스트 길이에 맞춤 (md:w-max) -->
@@ -89,7 +89,7 @@
                 </div>
             </section>
 
-            <!-- 3 & 4 & 5. 하단 차트 3분할 (스마트폰 가로모드 md 해상도부터 3분할 적용) -->
+            <!-- 3 & 4 & 5. 하단 차트 3분할 -->
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <!-- 월별 배당금 -->
                 <section class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
@@ -379,21 +379,28 @@
         async function loadAllData() {
             initCharts();
 
-            // 1. 계좌현황 파싱
+            // 실시간 계좌현황 값을 저장할 변수
+            let liveAsset = 0;
+            let liveProfit = 0;
+
+            // 1. 계좌현황 파싱 (당일 실시간 데이터 기준)
             const sumData = await fetchAndParseCSV(CSV_URLS.summary, "계좌현황");
             if (sumData && sumData.length > 0) {
                 const row = sumData[0];
+                liveAsset = cleanNum(row['총자산'] || 0);
+                liveProfit = cleanNum(row['총수익'] || row['평가수익'] || 0);
+                
                 updateSummaryCards({
                     principal: cleanNum(row['원금'] || 0),
-                    asset: cleanNum(row['총자산'] || 0),
-                    profit: cleanNum(row['총수익'] || row['평가수익'] || 0),
+                    asset: liveAsset,
+                    profit: liveProfit,
                     rate: parseFloat(String(row['수익률']).replace(/[^0-9.-]/g, '')) || 0
                 });
             } else {
                 updateSummaryCards({ principal: 0, asset: 0, profit: 0, rate: 0 });
             }
 
-            // 2. 자산기록 파싱 (및 전일 대비 증감 계산)
+            // 2. 자산기록 파싱 (및 실시간 데이터 대비 증감 계산)
             const astData = await fetchAndParseCSV(CSV_URLS.asset, "자산기록");
             if (astData && astData.length > 0) {
                 const validData = astData.filter(d => d['날짜'] && d['자산총액']);
@@ -422,21 +429,16 @@
                     assetChart.options.scales.y.max = finalMax;
                     assetChart.update();
 
-                    // 전일 대비 증감 계산 로직
-                    if (assetDataArray.length >= 2 && principalDataArray.length >= 2) {
-                        const currentAsset = assetDataArray[assetDataArray.length - 1];
-                        const previousAsset = assetDataArray[assetDataArray.length - 2];
-                        
-                        const currentPrincipal = principalDataArray[principalDataArray.length - 1];
-                        const previousPrincipal = principalDataArray[principalDataArray.length - 2];
-                        
-                        const currentProfit = currentAsset - currentPrincipal;
+                    // 전일(자산기록의 마지막 행) 대비 금일(계좌현황 실시간) 증감 계산 로직
+                    if (assetDataArray.length >= 1 && principalDataArray.length >= 1) {
+                        const previousAsset = assetDataArray[assetDataArray.length - 1];
+                        const previousPrincipal = principalDataArray[principalDataArray.length - 1];
                         const previousProfit = previousAsset - previousPrincipal;
 
-                        // 총 자산 증감률 (%)
+                        // 총 자산 증감률 (%) : (금일 실시간 총자산 - 전일 자산총액) / 전일 자산총액 * 100
                         const assetChangeEl = document.getElementById('val-asset-change');
                         if (previousAsset > 0) {
-                            const changeRate = ((currentAsset - previousAsset) / previousAsset) * 100;
+                            const changeRate = ((liveAsset - previousAsset) / previousAsset) * 100;
                             if (changeRate > 0) {
                                 assetChangeEl.innerText = `(+${changeRate.toFixed(2)}%)`;
                                 assetChangeEl.className = 'text-sm font-bold text-red-500';
@@ -449,9 +451,9 @@
                             }
                         }
 
-                        // 총 평가 수익 증감액 (원)
+                        // 총 평가 수익 증감액 (원) : 금일 실시간 총수익 - 전일 총수익(자산총액 - 원금)
                         const profitChangeEl = document.getElementById('val-profit-change');
-                        const profitChangeAmt = currentProfit - previousProfit;
+                        const profitChangeAmt = liveProfit - previousProfit;
                         
                         if (profitChangeAmt > 0) {
                             profitChangeEl.innerText = `(+${fmt(profitChangeAmt)}원)`;
