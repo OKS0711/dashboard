@@ -41,7 +41,7 @@
     <!-- Main Container (좌우 분할 레이아웃) -->
     <main class="max-w-[1800px] w-full mx-auto px-4 sm:px-6 md:px-8 py-6 flex flex-col md:flex-row gap-6 flex-grow">
         
-        <!-- 좌측 사이드바: 1. 계좌현황(누적) - 스마트폰 가로에서부터 너비를 텍스트 길이에 맞춤 (md:w-max) -->
+        <!-- 좌측 사이드바: 1. 계좌현황(누적) -->
         <aside class="w-full md:w-max flex-shrink-0 flex flex-col gap-4">
             <h2 class="text-lg font-bold text-slate-800 flex items-center">
                 <span class="w-2 h-6 bg-indigo-600 rounded-full mr-2"></span>
@@ -89,8 +89,8 @@
                 </div>
             </section>
 
-            <!-- 3 & 4 & 5. 하단 차트 3분할 -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <!-- 3 & 4 & 5 & 6. 하단 차트 4분할 (2x2 그리드) -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <!-- 월별 배당금 -->
                 <section class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
                     <h2 class="text-lg font-bold text-slate-800 flex items-center mb-6">
@@ -98,6 +98,16 @@
                     </h2>
                     <div class="relative h-[280px] w-full flex-grow">
                         <canvas id="dividendMonthlyChart"></canvas>
+                    </div>
+                </section>
+
+                <!-- 연도별 배당금 (추가된 그래프) -->
+                <section class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
+                    <h2 class="text-lg font-bold text-slate-800 flex items-center mb-6">
+                        <span class="w-2 h-6 bg-teal-500 rounded-full mr-2"></span>배당금 (연도별)
+                    </h2>
+                    <div class="relative h-[280px] w-full flex-grow">
+                        <canvas id="dividendYearlyChart"></canvas>
                     </div>
                 </section>
 
@@ -116,12 +126,19 @@
                     </div>
                 </section>
 
-                <!-- 종목별 자산 비중 도넛 차트 -->
+                <!-- 종목별 자산 비중 도넛 차트 (겹침 해결: 텍스트 상단 배치) -->
                 <section class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
-                    <h2 class="text-lg font-bold text-slate-800 flex items-center mb-6">
-                        <span class="w-2 h-6 bg-violet-500 rounded-full mr-2"></span>종목별 자산 비중
-                    </h2>
-                    <div class="relative h-[280px] w-full flex-grow flex items-center justify-center">
+                    <div class="flex items-center mb-2">
+                        <h2 class="text-lg font-bold text-slate-800 flex items-center">
+                            <span class="w-2 h-6 bg-violet-500 rounded-full mr-2"></span>종목별 자산 비중
+                        </h2>
+                    </div>
+                    <!-- 자산 합계 텍스트를 위쪽으로 분리 -->
+                    <div class="text-center mb-2">
+                        <p class="text-sm font-medium text-slate-500">자산 합계</p>
+                        <p id="val-donut-total" class="text-xl font-bold text-slate-900">0원</p>
+                    </div>
+                    <div class="relative h-[250px] w-full flex-grow flex items-center justify-center">
                         <canvas id="allocationRatioChart"></canvas>
                     </div>
                 </section>
@@ -135,54 +152,10 @@
         // '₩' 기호 및 콤마 제거 유틸
         const cleanNum = (str) => Number(String(str || '').replace(/[^\d.-]/g, ''));
 
-        // ==========================================
-        // Chart.js 플러그인 등록 (DataLabels & 중앙 텍스트)
-        // ==========================================
+        // Chart.js DataLabels 플러그인 활성화
         Chart.register(ChartDataLabels);
 
-        const centerTextPlugin = {
-            id: 'centerText',
-            beforeDraw(chart) {
-                if (chart.config.type === 'doughnut') {
-                    const { ctx } = chart;
-                    
-                    const meta = chart.getDatasetMeta(0);
-                    if (!meta || !meta.data || meta.data.length === 0) return;
-                    
-                    // 캔버스 중앙이 아닌 도넛(그래프)의 실제 중앙 좌표 추출
-                    const centerX = meta.data[0].x;
-                    const centerY = meta.data[0].y;
-
-                    const totalSum = chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
-                    if(totalSum <= 0) return;
-
-                    const text1 = "자산 합계";
-                    const text2 = fmt(totalSum) + "원";
-
-                    ctx.restore();
-                    ctx.textBaseline = 'middle';
-
-                    // 상단 텍스트 (자산 합계)
-                    ctx.font = `600 13px Pretendard, sans-serif`;
-                    ctx.fillStyle = '#64748b';
-                    const text1Width = ctx.measureText(text1).width;
-                    ctx.fillText(text1, centerX - text1Width / 2, centerY - 14);
-
-                    // 하단 텍스트 (총 금액)
-                    ctx.font = `bold 18px Pretendard, sans-serif`;
-                    ctx.fillStyle = '#0f172a';
-                    const text2Width = ctx.measureText(text2).width;
-                    ctx.fillText(text2, centerX - text2Width / 2, centerY + 10);
-                    
-                    ctx.save();
-                }
-            }
-        };
-        Chart.register(centerTextPlugin);
-
-        // ==========================================
         // 차트 초기화 함수
-        // ==========================================
         function updateSummaryCards(data) {
             document.getElementById('val-principal').innerText = fmt(data.principal) + ' 원';
             document.getElementById('val-principal').classList.remove('text-slate-400');
@@ -194,9 +167,10 @@
             document.getElementById('val-return').classList.remove('text-slate-400');
         }
 
-        let assetChart, monthlyChart, tickerChart, allocationChart;
+        let assetChart, monthlyChart, yearlyChart, tickerChart, allocationChart;
 
         function initCharts() {
+            // 1. 자산기록 추이
             const ctx1 = document.getElementById('assetChart').getContext('2d');
             assetChart = new Chart(ctx1, {
                 type: 'line',
@@ -223,6 +197,7 @@
                 }
             });
 
+            // 2. 월별 배당금
             const ctx2 = document.getElementById('dividendMonthlyChart').getContext('2d');
             monthlyChart = new Chart(ctx2, {
                 type: 'bar',
@@ -238,6 +213,23 @@
                 }
             });
 
+            // 3. 연도별 배당금 (새로 추가됨)
+            const ctxYearly = document.getElementById('dividendYearlyChart').getContext('2d');
+            yearlyChart = new Chart(ctxYearly, {
+                type: 'bar',
+                data: { labels: [], datasets: [{ label: '배당금 (원)', data: [], backgroundColor: '#14b8a6', borderRadius: 4 }] },
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    plugins: { legend: { display: false }, datalabels: { display: false } },
+                    scales: {
+                        x: { grid: { display: false } },
+                        y: { grid: { display: false }, grace: '20%' }
+                    }
+                }
+            });
+
+            // 4. 종목별 배당금 추이
             const ctx3 = document.getElementById('dividendTickerChart').getContext('2d');
             tickerChart = new Chart(ctx3, {
                 type: 'bar',
@@ -253,7 +245,7 @@
                 }
             });
 
-            // 종목별 비중 도넛 차트 설정
+            // 5. 종목별 자산 비중 도넛 차트 (중앙 텍스트 플러그인 제거 및 크기 최적화)
             const ctx4 = document.getElementById('allocationRatioChart').getContext('2d');
             allocationChart = new Chart(ctx4, {
                 type: 'doughnut',
@@ -261,7 +253,7 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    cutout: '75%', 
+                    cutout: '60%', // 텍스트가 위로 빠졌으므로 도넛 두께를 다시 약간 두껍게 복구
                     plugins: {
                         legend: { position: 'right', labels: { boxWidth: 10, font: { size: 11 } } },
                         tooltip: {
@@ -279,7 +271,7 @@
                             font: { weight: 'bold', size: 10 },
                             formatter: (value, context) => {
                                 const ratio = context.dataset.ratios[context.dataIndex];
-                                return ratio >= 3 ? ratio + '%' : ''; 
+                                return ratio >= 3 ? ratio + '%' : ''; // 3% 미만은 텍스트 숨김 (겹침 방지)
                             }
                         }
                     }
@@ -379,11 +371,10 @@
         async function loadAllData() {
             initCharts();
 
-            // 실시간 계좌현황 값을 저장할 변수
             let liveAsset = 0;
             let liveProfit = 0;
 
-            // 1. 계좌현황 파싱 (당일 실시간 데이터 기준)
+            // 1. 계좌현황 파싱
             const sumData = await fetchAndParseCSV(CSV_URLS.summary, "계좌현황");
             if (sumData && sumData.length > 0) {
                 const row = sumData[0];
@@ -400,7 +391,7 @@
                 updateSummaryCards({ principal: 0, asset: 0, profit: 0, rate: 0 });
             }
 
-            // 2. 자산기록 파싱 (및 날짜 기반 전일 대비 증감 계산)
+            // 2. 자산기록 파싱 및 증감 계산
             const astData = await fetchAndParseCSV(CSV_URLS.asset, "자산기록");
             if (astData && astData.length > 0) {
                 const validData = astData.filter(d => d['날짜'] && d['자산총액']);
@@ -429,7 +420,6 @@
                     assetChart.options.scales.y.max = finalMax;
                     assetChart.update();
 
-                    // 날짜를 기준으로 오늘 이전의 가장 최근 데이터(전일) 찾기 로직
                     let previousAsset = 0;
                     let previousPrincipal = 0;
                     let foundPrevious = false;
@@ -438,13 +428,11 @@
                     today.setHours(0, 0, 0, 0);
 
                     for (let i = validData.length - 1; i >= 0; i--) {
-                        // 공백 제거 후 날짜 포맷 (YYYY.MM.DD 등) 추출
                         const dStr = String(validData[i]['날짜']).replace(/\s+/g, '');
                         const match = dStr.match(/(\d{4})[.\-\/]+(\d{1,2})[.\-\/]+(\d{1,2})/);
                         
                         if (match) {
                             const rowDate = new Date(parseInt(match[1], 10), parseInt(match[2], 10) - 1, parseInt(match[3], 10));
-                            // 오늘 날짜보다 무조건 과거인 가장 마지막 행을 찾음
                             if (rowDate.getTime() < today.getTime()) {
                                 previousAsset = cleanNum(validData[i]['자산총액']);
                                 previousPrincipal = cleanNum(validData[i]['원금']);
@@ -454,7 +442,6 @@
                         }
                     }
 
-                    // 예외 처리: 날짜 파싱 실패 등으로 못 찾았을 경우 안전하게 배열의 끝에서 두 번째 값 사용
                     if (!foundPrevious) {
                         if (validData.length >= 2) {
                             previousAsset = cleanNum(validData[validData.length - 2]['자산총액']);
@@ -466,9 +453,8 @@
                     }
 
                     const previousProfit = previousAsset - previousPrincipal;
-
-                    // 총 자산 증감률 (%) : (금일 실시간 총자산 - 자산기록 전일 총자산) / 자산기록 전일 총자산 * 100
                     const assetChangeEl = document.getElementById('val-asset-change');
+
                     if (previousAsset > 0) {
                         const changeRate = ((liveAsset - previousAsset) / previousAsset) * 100;
                         if (changeRate > 0) {
@@ -483,7 +469,6 @@
                         }
                     }
 
-                    // 총 평가 수익 증감액 (원) : 금일 실시간 총수익 - 자산기록 전일 총수익(자산총액 - 원금)
                     const profitChangeEl = document.getElementById('val-profit-change');
                     const profitChangeAmt = liveProfit - previousProfit;
                     
@@ -500,7 +485,7 @@
                 }
             }
 
-            // 3. 배당차트 파싱
+            // 3 & 4. 배당차트 파싱 (월별 & 연도별 집계)
             const monData = await fetchAndParseCSV(CSV_URLS.monthly, "배당차트");
             if (monData && monData.length > 0) {
                 const validData = monData.filter(d => d['일자'] && d['배당금']);
@@ -508,10 +493,27 @@
                     monthlyChart.data.labels = validData.map(d => d['일자']);
                     monthlyChart.data.datasets[0].data = validData.map(d => cleanNum(d['배당금']));
                     monthlyChart.update();
+
+                    // 연도별 집계 로직
+                    const yearlyAgg = {};
+                    validData.forEach(d => {
+                        const dateStr = String(d['일자']).trim();
+                        // YYYY년 패턴이나 YYYY/ 패턴에서 연도 4자리 추출
+                        const match = dateStr.match(/^(\d{4})/);
+                        if (match) {
+                            const year = match[1] + "년";
+                            yearlyAgg[year] = (yearlyAgg[year] || 0) + cleanNum(d['배당금']);
+                        }
+                    });
+                    
+                    const years = Object.keys(yearlyAgg).sort();
+                    yearlyChart.data.labels = years;
+                    yearlyChart.data.datasets[0].data = years.map(y => yearlyAgg[y]);
+                    yearlyChart.update();
                 }
             }
 
-            // 4. 배당내역 종목별 파싱
+            // 5. 배당내역 종목별 파싱
             const tkData = await fetchAndParseCSV(CSV_URLS.ticker, "배당내역");
             if (tkData && tkData.length > 0) {
                 const parsedTickerData = tkData.map(d => {
@@ -541,7 +543,7 @@
                 }
             }
 
-            // 5. 종목현황 자산 비중 (도넛 차트) 파싱
+            // 6. 종목현황 자산 비중 (도넛 차트) 파싱 및 합계 텍스트 갱신
             const allocRawText = await fetchAndParseCSV(CSV_URLS.allocation, "종목현황", true);
             if (allocRawText) {
                 Papa.parse(allocRawText, {
@@ -585,8 +587,11 @@
                                 allocationChart.data.labels = parsedAllocData.map(d => d.ticker);
                                 allocationChart.data.datasets[0].data = parsedAllocData.map(d => d.amount);
                                 allocationChart.data.datasets[0].ratios = parsedAllocData.map(d => d.ratio);
-
                                 allocationChart.update();
+
+                                // 자산 합계 텍스트 업데이트
+                                const totalSum = parsedAllocData.reduce((sum, d) => sum + d.amount, 0);
+                                document.getElementById('val-donut-total').innerText = fmt(totalSum) + "원";
                             }
                         }
                     }
