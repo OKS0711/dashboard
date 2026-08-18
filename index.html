@@ -91,23 +91,24 @@
 
             <!-- 3 & 4 & 5 & 6. 하단 차트 4분할 (2x2 그리드) -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <!-- 월별 배당금 -->
-                <section class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
-                    <h2 class="text-lg font-bold text-slate-800 flex items-center mb-6">
-                        <span class="w-2 h-6 bg-emerald-500 rounded-full mr-2"></span>배당금 (월별)
-                    </h2>
-                    <div class="relative h-[280px] w-full flex-grow">
-                        <canvas id="dividendMonthlyChart"></canvas>
-                    </div>
-                </section>
-
-                <!-- 연도별 배당금 (추가된 그래프) -->
+                
+                <!-- 연도별 배당금 (순서 변경됨) -->
                 <section class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
                     <h2 class="text-lg font-bold text-slate-800 flex items-center mb-6">
                         <span class="w-2 h-6 bg-teal-500 rounded-full mr-2"></span>배당금 (연도별)
                     </h2>
                     <div class="relative h-[280px] w-full flex-grow">
                         <canvas id="dividendYearlyChart"></canvas>
+                    </div>
+                </section>
+
+                <!-- 월별 배당금 (순서 변경됨) -->
+                <section class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
+                    <h2 class="text-lg font-bold text-slate-800 flex items-center mb-6">
+                        <span class="w-2 h-6 bg-emerald-500 rounded-full mr-2"></span>배당금 (월별)
+                    </h2>
+                    <div class="relative h-[280px] w-full flex-grow">
+                        <canvas id="dividendMonthlyChart"></canvas>
                     </div>
                 </section>
 
@@ -126,14 +127,14 @@
                     </div>
                 </section>
 
-                <!-- 종목별 자산 비중 도넛 차트 (겹침 해결: 텍스트 상단 배치) -->
+                <!-- 종목별 자산 비중 도넛 차트 -->
                 <section class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
                     <div class="flex items-center mb-2">
                         <h2 class="text-lg font-bold text-slate-800 flex items-center">
                             <span class="w-2 h-6 bg-violet-500 rounded-full mr-2"></span>종목별 자산 비중
                         </h2>
                     </div>
-                    <!-- 자산 합계 텍스트를 위쪽으로 분리 -->
+                    <!-- 자산 합계 텍스트 -->
                     <div class="text-center mb-2">
                         <p class="text-sm font-medium text-slate-500">자산 합계</p>
                         <p id="val-donut-total" class="text-xl font-bold text-slate-900">0원</p>
@@ -213,7 +214,7 @@
                 }
             });
 
-            // 3. 연도별 배당금 (새로 추가됨)
+            // 3. 연도별 배당금
             const ctxYearly = document.getElementById('dividendYearlyChart').getContext('2d');
             yearlyChart = new Chart(ctxYearly, {
                 type: 'bar',
@@ -245,7 +246,7 @@
                 }
             });
 
-            // 5. 종목별 자산 비중 도넛 차트 (중앙 텍스트 플러그인 제거 및 크기 최적화)
+            // 5. 종목별 자산 비중 도넛 차트
             const ctx4 = document.getElementById('allocationRatioChart').getContext('2d');
             allocationChart = new Chart(ctx4, {
                 type: 'doughnut',
@@ -253,7 +254,7 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    cutout: '60%', // 텍스트가 위로 빠졌으므로 도넛 두께를 다시 약간 두껍게 복구
+                    cutout: '60%',
                     plugins: {
                         legend: { position: 'right', labels: { boxWidth: 10, font: { size: 11 } } },
                         tooltip: {
@@ -498,7 +499,6 @@
                     const yearlyAgg = {};
                     validData.forEach(d => {
                         const dateStr = String(d['일자']).trim();
-                        // YYYY년 패턴이나 YYYY/ 패턴에서 연도 4자리 추출
                         const match = dateStr.match(/^(\d{4})/);
                         if (match) {
                             const year = match[1] + "년";
@@ -543,7 +543,7 @@
                 }
             }
 
-            // 6. 종목현황 자산 비중 (도넛 차트) 파싱 및 합계 텍스트 갱신
+            // 6. 종목현황 자산 비중 (도넛 차트) 파싱
             const allocRawText = await fetchAndParseCSV(CSV_URLS.allocation, "종목현황", true);
             if (allocRawText) {
                 Papa.parse(allocRawText, {
@@ -589,7 +589,6 @@
                                 allocationChart.data.datasets[0].ratios = parsedAllocData.map(d => d.ratio);
                                 allocationChart.update();
 
-                                // 자산 합계 텍스트 업데이트
                                 const totalSum = parsedAllocData.reduce((sum, d) => sum + d.amount, 0);
                                 document.getElementById('val-donut-total').innerText = fmt(totalSum) + "원";
                             }
