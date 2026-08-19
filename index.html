@@ -8,9 +8,9 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- Chart.js DataLabels Plugin (비중 % 표시용) -->
+    <!-- Chart.js DataLabels Plugin -->
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
-    <!-- PapaParse (CSV 파싱용) -->
+    <!-- PapaParse -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -38,10 +38,10 @@
         </div>
     </header>
 
-    <!-- Main Container (좌우 분할 레이아웃) -->
+    <!-- Main Container -->
     <main class="max-w-[1800px] w-full mx-auto px-4 sm:px-6 md:px-8 py-6 flex flex-col md:flex-row gap-6 flex-grow">
         
-        <!-- 좌측 사이드바: 1. 계좌현황(누적) -->
+        <!-- 좌측 사이드바 -->
         <aside class="w-full md:w-max flex-shrink-0 flex flex-col gap-4">
             <h2 class="text-lg font-bold text-slate-800 flex items-center">
                 <span class="w-2 h-6 bg-indigo-600 rounded-full mr-2"></span>
@@ -76,9 +76,9 @@
             </div>
         </aside>
 
-        <!-- 우측 메인 영역: 차트 그룹 -->
+        <!-- 우측 메인 영역 -->
         <div class="flex-grow flex flex-col gap-6 min-w-0">
-            <!-- 2. 자산기록 추이 -->
+            <!-- 자산기록 추이 -->
             <section class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
                 <h2 class="text-lg font-bold text-slate-800 flex items-center mb-6">
                     <span class="w-2 h-6 bg-indigo-600 rounded-full mr-2"></span>
@@ -89,10 +89,10 @@
                 </div>
             </section>
 
-            <!-- 3 & 4 & 5 & 6. 하단 차트 4분할 (2x2 그리드) -->
+            <!-- 하단 4분할 그리드 -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 
-                <!-- 연도별 배당금 (순서 변경됨) -->
+                <!-- 1. 연도별 배당금 -->
                 <section class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
                     <h2 class="text-lg font-bold text-slate-800 flex items-center mb-6">
                         <span class="w-2 h-6 bg-teal-500 rounded-full mr-2"></span>배당금 (연도별)
@@ -102,7 +102,7 @@
                     </div>
                 </section>
 
-                <!-- 월별 배당금 (순서 변경됨) -->
+                <!-- 2. 월별 배당금 -->
                 <section class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
                     <h2 class="text-lg font-bold text-slate-800 flex items-center mb-6">
                         <span class="w-2 h-6 bg-emerald-500 rounded-full mr-2"></span>배당금 (월별)
@@ -112,7 +112,7 @@
                     </div>
                 </section>
 
-                <!-- 종목별 배당금 추이 -->
+                <!-- 3. 종목별 배당금 추이 -->
                 <section class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
                     <div class="flex items-center justify-between mb-6">
                         <h2 class="text-lg font-bold text-slate-800 flex items-center">
@@ -127,7 +127,7 @@
                     </div>
                 </section>
 
-                <!-- 종목별 자산 비중 도넛 차트 -->
+                <!-- 4. 종목별 자산 비중 -->
                 <section class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
                     <div class="flex items-center mb-2">
                         <h2 class="text-lg font-bold text-slate-800 flex items-center">
@@ -148,15 +148,15 @@
     </main>
 
     <script>
-        // 숫자에 콤마 찍기 유틸
+        // 유틸 함수
         const fmt = (num) => Number(num).toLocaleString('ko-KR');
-        // '₩' 기호 및 콤마 제거 유틸
         const cleanNum = (str) => Number(String(str || '').replace(/[^\d.-]/g, ''));
 
-        // Chart.js DataLabels 플러그인 활성화
         Chart.register(ChartDataLabels);
 
-        // 차트 초기화 함수
+        // 차트 중앙 텍스트 플러그인은 위로 텍스트를 빼면서 필요 없어졌으므로 제외했습니다.
+        // (도넛 안이 비워져서 모바일에서도 깔끔하게 보입니다)
+
         function updateSummaryCards(data) {
             document.getElementById('val-principal').innerText = fmt(data.principal) + ' 원';
             document.getElementById('val-principal').classList.remove('text-slate-400');
@@ -180,20 +180,12 @@
                     { label: '원금', data: [], borderColor: '#94a3b8', borderDash: [5, 5], fill: false, tension: 0.1, borderWidth: 2, pointRadius: 0 }
                 ]},
                 options: { 
-                    responsive: true, 
-                    maintainAspectRatio: false, 
+                    responsive: true, maintainAspectRatio: false, 
                     interaction: { mode: 'index', intersect: false },
                     plugins: { datalabels: { display: false } },
                     scales: {
                         x: { grid: { display: false } },
-                        y: {
-                            min: 200000000,
-                            grid: { display: false },
-                            ticks: { 
-                                stepSize: 20000000,
-                                callback: function(value) { return fmt(value); } 
-                            }
-                        }
+                        y: { min: 200000000, grid: { display: false }, ticks: { stepSize: 20000000, callback: value => fmt(value) } }
                     }
                 }
             });
@@ -204,13 +196,9 @@
                 type: 'bar',
                 data: { labels: [], datasets: [{ label: '배당금 (원)', data: [], backgroundColor: '#10b981', borderRadius: 4 }] },
                 options: { 
-                    responsive: true, 
-                    maintainAspectRatio: false, 
+                    responsive: true, maintainAspectRatio: false, 
                     plugins: { legend: { display: false }, datalabels: { display: false } },
-                    scales: {
-                        x: { grid: { display: false } },
-                        y: { grid: { display: false }, grace: '20%' }
-                    }
+                    scales: { x: { grid: { display: false } }, y: { grid: { display: false }, grace: '20%' } }
                 }
             });
 
@@ -220,13 +208,9 @@
                 type: 'bar',
                 data: { labels: [], datasets: [{ label: '배당금 (원)', data: [], backgroundColor: '#14b8a6', borderRadius: 4 }] },
                 options: { 
-                    responsive: true, 
-                    maintainAspectRatio: false, 
+                    responsive: true, maintainAspectRatio: false, 
                     plugins: { legend: { display: false }, datalabels: { display: false } },
-                    scales: {
-                        x: { grid: { display: false } },
-                        y: { grid: { display: false }, grace: '20%' }
-                    }
+                    scales: { x: { grid: { display: false } }, y: { grid: { display: false }, grace: '20%' } }
                 }
             });
 
@@ -236,13 +220,9 @@
                 type: 'bar',
                 data: { labels: [], datasets: [{ label: '배당금', data: [], backgroundColor: '#0ea5e9', borderRadius: 4 }] },
                 options: { 
-                    responsive: true, 
-                    maintainAspectRatio: false,
+                    responsive: true, maintainAspectRatio: false,
                     plugins: { datalabels: { display: false } },
-                    scales: {
-                        x: { grid: { display: false } },
-                        y: { grid: { display: false }, grace: '20%' }
-                    }
+                    scales: { x: { grid: { display: false } }, y: { grid: { display: false }, grace: '20%' } }
                 }
             });
 
@@ -252,9 +232,7 @@
                 type: 'doughnut',
                 data: { labels: [], datasets: [{ data: [], backgroundColor: ['#6366f1', '#3b82f6', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#f43f5e', '#14b8a6', '#84cc16'] }] },
                 options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    cutout: '60%',
+                    responsive: true, maintainAspectRatio: false, cutout: '60%',
                     plugins: {
                         legend: { position: 'right', labels: { boxWidth: 10, font: { size: 11 } } },
                         tooltip: {
@@ -268,11 +246,10 @@
                             }
                         },
                         datalabels: {
-                            color: '#ffffff',
-                            font: { weight: 'bold', size: 10 },
+                            color: '#ffffff', font: { weight: 'bold', size: 10 },
                             formatter: (value, context) => {
                                 const ratio = context.dataset.ratios[context.dataIndex];
-                                return ratio >= 3 ? ratio + '%' : ''; // 3% 미만은 텍스트 숨김 (겹침 방지)
+                                return ratio >= 3 ? ratio + '%' : ''; 
                             }
                         }
                     }
@@ -324,12 +301,11 @@
         }
 
         // ==========================================
-        // CSV 연동 및 파싱 로직
+        // CSV 연동 링크
         // ==========================================
         const CSV_URLS = {
             summary: "https://docs.google.com/spreadsheets/d/e/2PACX-1vTd6FRstXsX_mzilVwwOHiGOrdLSzpqRh1J8dG1hdNhMGlnlZ7QpXY2pG3IVyobLCD-6V1AWv2WHO01/pub?gid=1578316581&single=true&output=csv",
             asset: "https://docs.google.com/spreadsheets/d/e/2PACX-1vTd6FRstXsX_mzilVwwOHiGOrdLSzpqRh1J8dG1hdNhMGlnlZ7QpXY2pG3IVyobLCD-6V1AWv2WHO01/pub?gid=742064967&single=true&output=csv",
-            monthly: "https://docs.google.com/spreadsheets/d/e/2PACX-1vTd6FRstXsX_mzilVwwOHiGOrdLSzpqRh1J8dG1hdNhMGlnlZ7QpXY2pG3IVyobLCD-6V1AWv2WHO01/pub?gid=1992000063&single=true&output=csv",
             ticker: "https://docs.google.com/spreadsheets/d/e/2PACX-1vTd6FRstXsX_mzilVwwOHiGOrdLSzpqRh1J8dG1hdNhMGlnlZ7QpXY2pG3IVyobLCD-6V1AWv2WHO01/pub?gid=66143915&single=true&output=csv",
             allocation: "https://docs.google.com/spreadsheets/d/e/2PACX-1vTd6FRstXsX_mzilVwwOHiGOrdLSzpqRh1J8dG1hdNhMGlnlZ7QpXY2pG3IVyobLCD-6V1AWv2WHO01/pub?gid=1230304129&single=true&output=csv"
         };
@@ -348,7 +324,6 @@
                     let proxyText = await proxyResponse.text();
                     return isRaw ? proxyText : parseTextToJSON(proxyText);
                 } catch (proxyError) {
-                    console.error(`[${name}] 데이터 로드 실패:`, proxyError);
                     return null;
                 }
             }
@@ -357,14 +332,9 @@
         function parseTextToJSON(csvText) {
             return new Promise((resolve) => {
                 Papa.parse(csvText, {
-                    header: true,
-                    skipEmptyLines: true,
-                    transformHeader: function(h) {
-                        return h.replace(/[^\w가-힣]/g, '');
-                    },
-                    complete: function(results) {
-                        resolve(results.data);
-                    }
+                    header: true, skipEmptyLines: true,
+                    transformHeader: function(h) { return h.replace(/[^\w가-힣]/g, ''); },
+                    complete: function(results) { resolve(results.data); }
                 });
             });
         }
@@ -372,8 +342,7 @@
         async function loadAllData() {
             initCharts();
 
-            let liveAsset = 0;
-            let liveProfit = 0;
+            let liveAsset = 0, liveProfit = 0;
 
             // 1. 계좌현황 파싱
             const sumData = await fetchAndParseCSV(CSV_URLS.summary, "계좌현황");
@@ -383,9 +352,7 @@
                 liveProfit = cleanNum(row['총수익'] || row['평가수익'] || 0);
                 
                 updateSummaryCards({
-                    principal: cleanNum(row['원금'] || 0),
-                    asset: liveAsset,
-                    profit: liveProfit,
+                    principal: cleanNum(row['원금'] || 0), asset: liveAsset, profit: liveProfit,
                     rate: parseFloat(String(row['수익률']).replace(/[^0-9.-]/g, '')) || 0
                 });
             } else {
@@ -408,49 +375,34 @@
                     const maxAsset = Math.max(...assetDataArray);
                     const maxPrincipal = Math.max(...principalDataArray);
                     const absoluteMax = Math.max(maxAsset, maxPrincipal);
-                    
                     const step = 20000000; 
-                    let targetMax = absoluteMax * 1.1; 
-                    let finalMax = Math.round(targetMax / step) * step; 
+                    let finalMax = Math.ceil((absoluteMax * 1.1) / step) * step; 
                     
-                    if (finalMax <= absoluteMax) {
-                        finalMax = Math.ceil(absoluteMax / step) * step;
-                        if (finalMax === absoluteMax) { finalMax += step; }
-                    }
-
                     assetChart.options.scales.y.max = finalMax;
                     assetChart.update();
 
-                    let previousAsset = 0;
-                    let previousPrincipal = 0;
-                    let foundPrevious = false;
-
+                    // 전일 데이터 탐색
+                    let previousAsset = 0, previousPrincipal = 0, foundPrevious = false;
                     const today = new Date();
                     today.setHours(0, 0, 0, 0);
 
                     for (let i = validData.length - 1; i >= 0; i--) {
                         const dStr = String(validData[i]['날짜']).replace(/\s+/g, '');
                         const match = dStr.match(/(\d{4})[.\-\/]+(\d{1,2})[.\-\/]+(\d{1,2})/);
-                        
                         if (match) {
                             const rowDate = new Date(parseInt(match[1], 10), parseInt(match[2], 10) - 1, parseInt(match[3], 10));
                             if (rowDate.getTime() < today.getTime()) {
                                 previousAsset = cleanNum(validData[i]['자산총액']);
                                 previousPrincipal = cleanNum(validData[i]['원금']);
-                                foundPrevious = true;
-                                break;
+                                foundPrevious = true; break;
                             }
                         }
                     }
 
-                    if (!foundPrevious) {
-                        if (validData.length >= 2) {
-                            previousAsset = cleanNum(validData[validData.length - 2]['자산총액']);
-                            previousPrincipal = cleanNum(validData[validData.length - 2]['원금']);
-                        } else if (validData.length === 1) {
-                            previousAsset = cleanNum(validData[0]['자산총액']);
-                            previousPrincipal = cleanNum(validData[0]['원금']);
-                        }
+                    if (!foundPrevious && validData.length >= 1) {
+                        const idx = validData.length >= 2 ? validData.length - 2 : 0;
+                        previousAsset = cleanNum(validData[idx]['자산총액']);
+                        previousPrincipal = cleanNum(validData[idx]['원금']);
                     }
 
                     const previousProfit = previousAsset - previousPrincipal;
@@ -486,34 +438,7 @@
                 }
             }
 
-            // 3 & 4. 배당차트 파싱 (월별 & 연도별 집계)
-            const monData = await fetchAndParseCSV(CSV_URLS.monthly, "배당차트");
-            if (monData && monData.length > 0) {
-                const validData = monData.filter(d => d['일자'] && d['배당금']);
-                if(validData.length > 0) {
-                    monthlyChart.data.labels = validData.map(d => d['일자']);
-                    monthlyChart.data.datasets[0].data = validData.map(d => cleanNum(d['배당금']));
-                    monthlyChart.update();
-
-                    // 연도별 집계 로직
-                    const yearlyAgg = {};
-                    validData.forEach(d => {
-                        const dateStr = String(d['일자']).trim();
-                        const match = dateStr.match(/^(\d{4})/);
-                        if (match) {
-                            const year = match[1] + "년";
-                            yearlyAgg[year] = (yearlyAgg[year] || 0) + cleanNum(d['배당금']);
-                        }
-                    });
-                    
-                    const years = Object.keys(yearlyAgg).sort();
-                    yearlyChart.data.labels = years;
-                    yearlyChart.data.datasets[0].data = years.map(y => yearlyAgg[y]);
-                    yearlyChart.update();
-                }
-            }
-
-            // 5. 배당내역 종목별 파싱
+            // 3. 배당내역 원본 파싱 (월별, 연도별, 종목별 차트 일괄 생성하여 데이터 누락 100% 방지)
             const tkData = await fetchAndParseCSV(CSV_URLS.ticker, "배당내역");
             if (tkData && tkData.length > 0) {
                 const parsedTickerData = tkData.map(d => {
@@ -539,20 +464,68 @@
                 }).filter(Boolean).filter(d => d.amount > 0);
                 
                 if(parsedTickerData.length > 0) {
-                    updateTickerChartData(parsedTickerData);
+                    updateTickerChartData(parsedTickerData); // 종목별 차트
+
+                    // 월별 & 연도별 집계 로직
+                    const monthlyAgg = {};
+                    const yearlyAgg = {};
+
+                    parsedTickerData.forEach(d => {
+                        const [y, m] = d.date.split('/');
+                        if (y && m) {
+                            const monthKey = `${y}년 ${m}월`;
+                            monthlyAgg[monthKey] = (monthlyAgg[monthKey] || 0) + d.amount;
+                            const yearKey = `${y}년`;
+                            yearlyAgg[yearKey] = (yearlyAgg[yearKey] || 0) + d.amount;
+                        }
+                    });
+
+                    // 월별 차트 (비어있는 달도 0원으로 강제 채우기)
+                    const uniqueMonthKeys = Object.keys(monthlyAgg).sort();
+                    let continuousMonths = [];
+                    let continuousMonthData = [];
+
+                    if (uniqueMonthKeys.length > 0) {
+                        const first = uniqueMonthKeys[0].match(/(\d{4})년 (\d{2})월/);
+                        const last = uniqueMonthKeys[uniqueMonthKeys.length - 1].match(/(\d{4})년 (\d{2})월/);
+
+                        if (first && last) {
+                            let currY = parseInt(first[1], 10);
+                            let currM = parseInt(first[2], 10);
+                            const endY = parseInt(last[1], 10);
+                            const endM = parseInt(last[2], 10);
+
+                            while (currY < endY || (currY === endY && currM <= endM)) {
+                                const key = `${currY}년 ${String(currM).padStart(2, '0')}월`;
+                                continuousMonths.push(key);
+                                continuousMonthData.push(monthlyAgg[key] || 0); // 배당 없는 달은 0원 적용
+
+                                currM++;
+                                if (currM > 12) { currM = 1; currY++; }
+                            }
+                        }
+                    }
+                    
+                    monthlyChart.data.labels = continuousMonths;
+                    monthlyChart.data.datasets[0].data = continuousMonthData;
+                    monthlyChart.update();
+
+                    // 연도별 차트
+                    const uniqueYears = Object.keys(yearlyAgg).sort();
+                    yearlyChart.data.labels = uniqueYears;
+                    yearlyChart.data.datasets[0].data = uniqueYears.map(y => yearlyAgg[y]);
+                    yearlyChart.update();
                 }
             }
 
-            // 6. 종목현황 자산 비중 (도넛 차트) 파싱
+            // 4. 종목현황 자산 비중 파싱
             const allocRawText = await fetchAndParseCSV(CSV_URLS.allocation, "종목현황", true);
             if (allocRawText) {
                 Papa.parse(allocRawText, {
-                    header: false,
-                    skipEmptyLines: true,
+                    header: false, skipEmptyLines: true,
                     complete: function(results) {
                         const rows = results.data;
-                        let headerIdx = -1;
-                        let nameCol = -1, amountCol = -1, ratioCol = -1;
+                        let headerIdx = -1, nameCol = -1, amountCol = -1, ratioCol = -1;
 
                         for (let i = 0; i < Math.min(20, rows.length); i++) {
                             for (let j = 0; j < rows[i].length; j++) {
@@ -583,7 +556,6 @@
 
                             if (parsedAllocData.length > 0) {
                                 parsedAllocData.sort((a, b) => b.amount - a.amount);
-                                
                                 allocationChart.data.labels = parsedAllocData.map(d => d.ticker);
                                 allocationChart.data.datasets[0].data = parsedAllocData.map(d => d.amount);
                                 allocationChart.data.datasets[0].ratios = parsedAllocData.map(d => d.ratio);
