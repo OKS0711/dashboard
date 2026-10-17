@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>투자 및 배당 통합 대시보드</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Chart.js DataLabels Plugin (비중 % 표시용) -->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+    <!-- PapaParse (CSV 파싱용) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Pretendard', sans-serif; background-color: #f8fafc; }
+        @media print {
+            @page { size: landscape; margin: 10mm; }
+            body { background-color: white; }
+            .shadow-sm { box-shadow: none !important; border: 1px solid #e2e8f0; }
+        }
+    </style>
+</head>
+<body class="text-slate-800 antialiased min-h-screen flex flex-col">
+    <!-- Header -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm">
+        <div class="max-w-[1800px] w-full mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="bg-indigo-600 text-white p-2 rounded-xl shadow-md">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                </div>
+                <h1 class="text-xl font-bold text-slate-900">포트폴리오 및 배당 통합 대시보드</h1>
+            </div>
+            <span class="text-xs font-medium text-slate-500 bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full flex items-center gap-1">
+                <span class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span> Live Syncing
+            </span>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="max-w-[1800px] w-full mx-auto px-4 sm:px-6 md:px-8 py-6 flex flex-col md:flex-row gap-6 flex-grow">
+        
+        <!-- 좌측 사이드바: 1. 계좌현황(누적) -->
+        <aside class="w-full md:w-max flex-shrink-0 flex flex-col gap-4">
+            <h2 class="text-lg font-bold text-slate-800 flex items-center">
+                <span class="w-2 h-6 bg-indigo-600 rounded-full mr-2"></span>
+                계좌 현황 요약
+            </h2>
+            <div class="flex flex-col gap-4 w-max">
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                    <p class="text-sm font-medium text-slate-500">총 원금</p>
+                    <p id="val-principal" class="text-2xl font-bold text-slate-900 mt-2 text-slate-400">데이터 로딩중...</p>
+                </div>
+                
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                    <div class="flex items-center gap-2">
+                        <p class="text-sm font-medium text-slate-500">총 자산</p>
+                        <p id="val-asset-change" class="text-sm font-bold"></p>
+                    </div>
+                    <p id="val-total-asset" class="text-2xl font-bold text-indigo-600 mt-2 text-slate-400">데이터 로딩중...</p>
+                </div>
+                
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                    <div class="flex items-center gap-2">
+                        <p class="text-sm font-medium text-slate-500">총 평가 수익</p>
+                        <p id="val-profit-change" class="text-sm font-bold"></p>
+                    </div>
+                    <p id="val-profit" class="text-2xl font-bold text-slate-400 mt-2">데이터 로딩중...</p>
+                </div>
+                
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                    <p class="text-sm font-medium text-slate-500">누적 수익률</p>
+                    <p id="val-return" class="text-2xl font-bold text-slate-400 mt-2">데이터 로딩중...</p>
+                </div>
+            </div>
+        </aside>
+
+        <!-- 우측 메인 영역: 차트 그룹 -->
+        <div class="flex-grow flex flex-col gap-6 min-w-0">
+            <!-- 2. 자산기록 추이 -->
+            <section class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
+                <h2 class="text-lg font-bold text-slate-800 flex items-center mb-6">
+                    <span class="w-2 h-6 bg-indigo-600 rounded-full mr-2"></span>
+                    원금 및 자산총액 추이 비교
+                </h2>
+                <div class="relative h-[350px] w-full flex-grow">
+                    <canvas id="assetChart"></canvas>
+                </div>
+            </section>
+
+            <!-- 하단 차트 4분할 (2x2 그리드) -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                <!-- 연도별 배당금 -->
+                <section class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
+                    <h2 class="text-lg font-bold text-slate-800 flex items-center mb-6">
+                        <span class="w-2 h-6 bg-teal-500 rounded-full mr-2"></span>배당금 (연도별)
+                    </h2>
+                    <div class="relative h-[280px] w-full flex-grow">
+                        <canvas id="dividendYearlyChart"></canvas>
+                    </div>
+                </section>
+
+                <!-- 월별 배당금 -->
+                <section class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
+                    <h2 class="text-lg font-bold text-slate-800 flex items-center mb-6">
+                        <span class="w-2 h-6 bg-emerald-500 rounded-full mr-2"></span>배당금 (월별)
+                    </h2>
+                    <div class="relative h-[280px] w-full flex-grow">
+                        <canvas id="dividendMonthlyChart"></canvas>
+                    </div>
+                </section>
+
+                <!-- 종목별 배당금 추이 -->
+                <section class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
+                    <div class="flex items-center justify-between mb-6">
+                        <h2 class="text-lg font-bold text-slate-800 flex items-center">
+                            <span class="w-2 h-6 bg-sky-500 rounded-full mr-2"></span>배당금 (종목별)
+                        </h2>
+                        <select id="tickerFilter" class="bg-slate-50 border border-slate-300 text-sm rounded-xl px-3 py-1 font-medium focus:ring-indigo-500 focus:border-indigo-500">
+                            <option value="ALL">전체 합산</option>
+                        </select>
+                    </div>
+                    <div class="relative h-[280px] w-full flex-grow">
+                        <canvas id="dividendTickerChart"></canvas>
+                    </div>
+                </section>
+
+                <!-- 종목별 자산 비중 도넛 차트 -->
+                <section class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
+                    <div class="flex items-center mb-2">
+                        <h2 class="text-lg font-bold text-slate-800 flex items-center">
+                            <span class="w-2 h-6 bg-violet-500 rounded-full mr-2"></span>종목별 자산 비중
+                        </h2>
+                    </div>
+                    <!-- 자산 합계 텍스트 -->
+                    <div class="text-center mb-2">
+                        <p class="text-sm font-medium text-slate-500">자산 합계</p>
+                        <p id="val-donut-total" class="text-xl font-bold text-slate-900">0원</p>
+                    </div>
+                    <div class="relative h-[250px] w-full flex-grow flex items-center justify-center">
+                        <canvas id="allocationRatioChart"></canvas>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // 숫자에 콤마 찍기 유틸
+        const fmt = (num) => Number(num).toLocaleString('ko-KR');
+        // '₩' 기호 및 콤마 제거 유틸
+        const cleanNum = (str) => Number(String(str || '').replace(/[^\d.-]/g, ''));
+
+        // Chart.js DataLabels 플러그인 활성화
+        Chart.register(ChartDataLabels);
+
+        // 요약 카드 업데이트 (수익률 및 평가수익 색상/부호 동적 적용 로직)
+        function updateSummaryCards(data) {
+            // 총 원금
+            const principalEl = document.getElementById('val-principal');
+            principalEl.innerText = fmt(data.principal) + ' 원';
+            principalEl.className = 'text-2xl font-bold text-slate-900 mt-2';
+
+            // 총 자산
+            const assetEl = document.getElementById('val-total-asset');
+            assetEl.innerText = fmt(data.asset) + ' 원';
+            assetEl.className = 'text-2xl font-bold text-indigo-600 mt-2';
+
+            // 총 평가 수익
+            const profitEl = document.getElementById('val-profit');
+            if (data.profit > 0) {
+                profitEl.innerText = '+' + fmt(data.profit) + ' 원';
+                profitEl.className = 'text-2xl font-bold text-red-500 mt-2';
+            } else if (data.profit < 0) {
+                // fmt()가 음수 기호(-)를 자동으로 붙여줍니다.
+                profitEl.innerText = fmt(data.profit) + ' 원'; 
+                profitEl.className = 'text-2xl font-bold text-blue-500 mt-2';
+            } else {
+                profitEl.innerText = '0 원';
+                profitEl.className = 'text-2xl font-bold text-slate-800 mt-2';
+            }
+
+            // 누적 수익률
+            const returnEl = document.getElementById('val-return');
+            if (data.rate > 0) {
+                returnEl.innerText = '+' + data.rate + ' %';
+                returnEl.className = 'text-2xl font-bold text-red-500 mt-2';
+            } else if (data.rate < 0) {
+                returnEl.innerText = data.rate + ' %'; 
+                returnEl.className = 'text-2xl font-bold text-blue-500 mt-2';
+            } else {
+                returnEl.innerText = '0 %';
+                returnEl.className = 'text-2xl font-bold text-slate-800 mt-2';
+            }
+        }
+
+        let assetChart, monthlyChart, yearlyChart, tickerChart, allocationChart;
+
+        function initCharts() {
+            // 1. 자산기록 추이
+            const ctx1 = document.getElementById('assetChart').getContext('2d');
+            assetChart = new Chart(ctx1, {
+                type: 'line',
+                data: { labels: [], datasets: [
+                    { label: '자산총액', data: [], borderColor: '#6366f1', backgroundColor: 'rgba(99, 102, 241, 0.1)', fill: true, tension: 0.1, borderWidth: 2, pointRadius: 0 },
+                    { label: '원금', data: [], borderColor: '#94a3b8', borderDash: [5, 5], fill: false, tension: 0.1, borderWidth: 2, pointRadius: 0 }
+                ]},
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: { datalabels: { display: false } },
+                    scales: {
+                        x: { grid: { display: false } },
+                        y: {
+                            min: 200000000,
+                            grid: { display: false },
+                            ticks: { 
+                                stepSize: 20000000,
+                                callback: function(value) { return fmt(value); } 
+                            }
+                        }
+                    }
+                }
+            });
+
+            // 2. 월별 배당금
+            const ctx2 = document.getElementById('dividendMonthlyChart').getContext('2d');
+            monthlyChart = new Chart(ctx2, {
+                type: 'bar',
+                data: { labels: [], datasets: [{ label: '배당금 (원)', data: [], backgroundColor: '#10b981', borderRadius: 4 }] },
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    plugins: { legend: { display: false }, datalabels: { display: false } },
+                    scales: {
+                        x: { grid: { display: false } },
+                        y: { grid: { display: false }, grace: '20%' }
+                    }
+                }
+            });
+
+            // 3. 연도별 배당금
+            const ctxYearly = document.getElementById('dividendYearlyChart').getContext('2d');
+            yearlyChart = new Chart(ctxYearly, {
+                type: 'bar',
+                data: { labels: [], datasets: [{ label: '배당금 (원)', data: [], backgroundColor: '#14b8a6', borderRadius: 4 }] },
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    plugins: { legend: { display: false }, datalabels: { display: false } },
+                    scales: {
+                        x: { grid: { display: false } },
+                        y: { grid: { display: false }, grace: '20%' }
+                    }
+                }
+            });
+
+            // 4. 종목별 배당금 추이
+            const ctx3 = document.getElementById('dividendTickerChart').getContext('2d');
+            tickerChart = new Chart(ctx3, {
+                type: 'bar',
+                data: { labels: [], datasets: [{ label: '배당금', data: [], backgroundColor: '#0ea5e9', borderRadius: 4 }] },
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false,
+                    plugins: { datalabels: { display: false } },
+                    scales: {
+                        x: { grid: { display: false } },
+                        y: { grid: { display: false }, grace: '20%' }
+                    }
+                }
+            });
+
+            // 5. 종목별 자산 비중 도넛 차트
+            const ctx4 = document.getElementById('allocationRatioChart').getContext('2d');
+            allocationChart = new Chart(ctx4, {
+                type: 'doughnut',
+                data: { labels: [], datasets: [{ data: [], backgroundColor: ['#6366f1', '#3b82f6', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#f43f5e', '#14b8a6', '#84cc16'] }] },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '60%', 
+                    plugins: {
+                        legend: { position: 'right', labels: { boxWidth: 10, font: { size: 11 } } },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.label || '';
+                                    const value = context.parsed;
+                                    const ratio = context.dataset.ratios[context.dataIndex];
+                                    return `${label}: ${fmt(value)}원 (${ratio}%)`;
+                                }
+                            }
+                        },
+                        datalabels: {
+                            color: '#ffffff',
+                            font: { weight: 'bold', size: 10 },
+                            formatter: (value, context) => {
+                                const ratio = context.dataset.ratios[context.dataIndex];
+                                return ratio >= 3 ? ratio + '%' : ''; // 3% 미만은 텍스트 숨김
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        let rawTickerData = [];
+
+        function updateTickerChartData(data) {
+            rawTickerData = data;
+            const tickers = [...new Set(data.map(d => d.ticker))].filter(Boolean);
+            const select = document.getElementById('tickerFilter');
+            select.innerHTML = '<option value="ALL">전체 합산</option>';
+            tickers.forEach(t => select.innerHTML += `<option value="${t}">${t}</option>`);
+
+            applyTickerFilter('ALL');
+            select.addEventListener('change', (e) => applyTickerFilter(e.target.value));
+        }
+
+        function applyTickerFilter(targetTicker) {
+            const uniqueDates = [...new Set(rawTickerData.map(d => d.date))].sort();
+            let allDates = uniqueDates;
+            if (uniqueDates.length > 1) {
+                const start = uniqueDates[0].split('/');
+                const end = uniqueDates[uniqueDates.length - 1].split('/');
+                if (start.length === 2 && end.length === 2) {
+                    let sy = parseInt(start[0], 10), sm = parseInt(start[1], 10);
+                    let ey = parseInt(end[0], 10), em = parseInt(end[1], 10);
+                    const continuousDates = [];
+                    while (sy < ey || (sy === ey && sm <= em)) {
+                        continuousDates.push(`${sy}/${String(sm).padStart(2, '0')}`);
+                        sm++;
+                        if (sm > 12) { sm = 1; sy++; }
+                    }
+                    allDates = continuousDates;
+                }
+            }
+
+            const filtered = targetTicker === 'ALL' ? rawTickerData : rawTickerData.filter(d => d.ticker === targetTicker);
+            const aggregated = {};
+            filtered.forEach(d => { aggregated[d.date] = (aggregated[d.date] || 0) + d.amount; });
+
+            tickerChart.data.labels = allDates;
+            tickerChart.data.datasets[0].label = targetTicker === 'ALL' ? '합산 배당금' : `${targetTicker} 배당금`;
+            tickerChart.data.datasets[0].data = allDates.map(date => aggregated[date] || 0);
+            tickerChart.data.datasets[0].backgroundColor = targetTicker === 'ALL' ? '#0ea5e9' : '#8b5cf6';
+            tickerChart.update();
+        }
+
+        // ==========================================
+        // CSV 연동 및 파싱 로직
+        // ==========================================
+        const CSV_URLS = {
+            summary: "https://docs.google.com/spreadsheets/d/e/2PACX-1vTd6FRstXsX_mzilVwwOHiGOrdLSzpqRh1J8dG1hdNhMGlnlZ7QpXY2pG3IVyobLCD-6V1AWv2WHO01/pub?gid=1578316581&single=true&output=csv",
+            asset: "https://docs.google.com/spreadsheets/d/e/2PACX-1vTd6FRstXsX_mzilVwwOHiGOrdLSzpqRh1J8dG1hdNhMGlnlZ7QpXY2pG3IVyobLCD-6V1AWv2WHO01/pub?gid=742064967&single=true&output=csv",
+            monthly: "https://docs.google.com/spreadsheets/d/e/2PACX-1vTd6FRstXsX_mzilVwwOHiGOrdLSzpqRh1J8dG1hdNhMGlnlZ7QpXY2pG3IVyobLCD-6V1AWv2WHO01/pub?gid=1992000063&single=true&output=csv",
+            ticker: "https://docs.google.com/spreadsheets/d/e/2PACX-1vTd6FRstXsX_mzilVwwOHiGOrdLSzpqRh1J8dG1hdNhMGlnlZ7QpXY2pG3IVyobLCD-6V1AWv2WHO01/pub?gid=66143915&single=true&output=csv",
+            allocation: "https://docs.google.com/spreadsheets/d/e/2PACX-1vTd6FRstXsX_mzilVwwOHiGOrdLSzpqRh1J8dG1hdNhMGlnlZ7QpXY2pG3IVyobLCD-6V1AWv2WHO01/pub?gid=1230304129&single=true&output=csv"
+        };
+
+        async function fetchAndParseCSV(url, name, isRaw = false) {
+            const noCacheUrl = url + "&_t=" + Date.now();
+            try {
+                let response = await fetch(noCacheUrl);
+                if (!response.ok) throw new Error("Direct fetch failed");
+                let text = await response.text();
+                return isRaw ? text : parseTextToJSON(text);
+            } catch (error) {
+                try {
+                    let proxyUrl = "https://api.allorigins.win/raw?url=" + encodeURIComponent(noCacheUrl);
+                    let proxyResponse = await fetch(proxyUrl);
+                    let proxyText = await proxyResponse.text();
+                    return isRaw ? proxyText : parseTextToJSON(proxyText);
+                } catch (proxyError) {
+                    console.error(`[${name}] 데이터 로드 실패:`, proxyError);
+                    return null;
+                }
+            }
+        }
+
+        function parseTextToJSON(csvText) {
+            return new Promise((resolve) => {
+                Papa.parse(csvText, {
+                    header: true,
+                    skipEmptyLines: true,
+                    transformHeader: function(h) {
+                        return h.replace(/[^\w가-힣]/g, '');
+                    },
+                    complete: function(results) {
+                        resolve(results.data);
+                    }
+                });
+            });
+        }
+
+        async function loadAllData() {
+            initCharts();
+
+            let liveAsset = 0;
+            let liveProfit = 0;
+
+            // 1. 계좌현황 파싱
+            const sumData = await fetchAndParseCSV(CSV_URLS.summary, "계좌현황");
+            if (sumData && sumData.length > 0) {
+                const row = sumData[0];
+                liveAsset = cleanNum(row['총자산'] || 0);
+                liveProfit = cleanNum(row['총수익'] || row['평가수익'] || 0);
+                
+                updateSummaryCards({
+                    principal: cleanNum(row['원금'] || 0),
+                    asset: liveAsset,
+                    profit: liveProfit,
+                    rate: parseFloat(String(row['수익률']).replace(/[^0-9.-]/g, '')) || 0
+                });
+            } else {
+                updateSummaryCards({ principal: 0, asset: 0, profit: 0, rate: 0 });
+            }
+
+            // 2. 자산기록 파싱 및 증감 계산
+            const astData = await fetchAndParseCSV(CSV_URLS.asset, "자산기록");
+            if (astData && astData.length > 0) {
+                const validData = astData.filter(d => d['날짜'] && d['자산총액']);
+                if(validData.length > 0) {
+                    assetChart.data.labels = validData.map(d => String(d['날짜']).split(/[오aA]/)[0].trim());
+                    
+                    const assetDataArray = validData.map(d => cleanNum(d['자산총액']));
+                    const principalDataArray = validData.map(d => cleanNum(d['원금']));
+                    
+                    assetChart.data.datasets[0].data = assetDataArray;
+                    assetChart.data.datasets[1].data = principalDataArray;
+                    
+                    const maxAsset = Math.max(...assetDataArray);
+                    const maxPrincipal = Math.max(...principalDataArray);
+                    const absoluteMax = Math.max(maxAsset, maxPrincipal);
+                    
+                    const step = 20000000; 
+                    let targetMax = absoluteMax * 1.1; 
+                    let finalMax = Math.round(targetMax / step) * step; 
+                    
+                    if (finalMax <= absoluteMax) {
+                        finalMax = Math.ceil(absoluteMax / step) * step;
+                        if (finalMax === absoluteMax) { finalMax += step; }
+                    }
+
+                    assetChart.options.scales.y.max = finalMax;
+                    assetChart.update();
+
+                    let previousAsset = 0;
+                    let previousPrincipal = 0;
+                    let foundPrevious = false;
+
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+
+                    for (let i = validData.length - 1; i >= 0; i--) {
+                        const dStr = String(validData[i]['날짜']).replace(/\s+/g, '');
+                        const match = dStr.match(/(\d{4})[.\-\/]+(\d{1,2})[.\-\/]+(\d{1,2})/);
+                        
+                        if (match) {
+                            const rowDate = new Date(parseInt(match[1], 10), parseInt(match[2], 10) - 1, parseInt(match[3], 10));
+                            if (rowDate.getTime() < today.getTime()) {
+                                previousAsset = cleanNum(validData[i]['자산총액']);
+                                previousPrincipal = cleanNum(validData[i]['원금']);
+                                foundPrevious = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (!foundPrevious) {
+                        if (validData.length >= 2) {
+                            previousAsset = cleanNum(validData[validData.length - 2]['자산총액']);
+                            previousPrincipal = cleanNum(validData[validData.length - 2]['원금']);
+                        } else if (validData.length === 1) {
+                            previousAsset = cleanNum(validData[0]['자산총액']);
+                            previousPrincipal = cleanNum(validData[0]['원금']);
+                        }
+                    }
+
+                    const previousProfit = previousAsset - previousPrincipal;
+                    const assetChangeEl = document.getElementById('val-asset-change');
+
+                    if (previousAsset > 0) {
+                        const changeRate = ((liveAsset - previousAsset) / previousAsset) * 100;
+                        if (changeRate > 0) {
+                            assetChangeEl.innerText = `(+${changeRate.toFixed(2)}%)`;
+                            assetChangeEl.className = 'text-sm font-bold text-red-500';
+                        } else if (changeRate < 0) {
+                            assetChangeEl.innerText = `(${changeRate.toFixed(2)}%)`;
+                            assetChangeEl.className = 'text-sm font-bold text-blue-500';
+                        } else {
+                            assetChangeEl.innerText = `(0.00%)`;
+                            assetChangeEl.className = 'text-sm font-bold text-slate-400';
+                        }
+                    }
+
+                    const profitChangeEl = document.getElementById('val-profit-change');
+                    const profitChangeAmt = liveProfit - previousProfit;
+                    
+                    if (profitChangeAmt > 0) {
+                        profitChangeEl.innerText = `(+${fmt(profitChangeAmt)}원)`;
+                        profitChangeEl.className = 'text-sm font-bold text-red-500';
+                    } else if (profitChangeAmt < 0) {
+                        profitChangeEl.innerText = `(-${fmt(Math.abs(profitChangeAmt))}원)`;
+                        profitChangeEl.className = 'text-sm font-bold text-blue-500';
+                    } else {
+                        profitChangeEl.innerText = `(0원)`;
+                        profitChangeEl.className = 'text-sm font-bold text-slate-400';
+                    }
+                }
+            }
+
+            // 3. 배당내역 원본 파싱 (월별, 연도별, 종목별 차트 일괄 생성)
+            const tkData = await fetchAndParseCSV(CSV_URLS.ticker, "배당내역");
+            if (tkData && tkData.length > 0) {
+                const parsedTickerData = tkData.map(d => {
+                    let dateStr = '';
+                    if (d['연도'] && d['월']) {
+                        const y = String(d['연도']).replace(/[^0-9]/g, '');
+                        const m = String(d['월']).replace(/[^0-9]/g, '').padStart(2, '0');
+                        dateStr = `${y}/${m}`;
+                    } else if (d['일자']) {
+                        const match = String(d['일자']).match(/(\d{4})[-\/\.년\s]+(\d{1,2})/);
+                        if (match) dateStr = `${match[1]}/${String(match[2]).padStart(2, '0')}`;
+                        else dateStr = d['일자'];
+                    }
+                    
+                    const ticker = (d['종목명'] || d['종목코드'] || '').trim();
+                    if (!ticker) return null;
+
+                    let amount = cleanNum(d['원화환산']);
+                    if (amount === 0) amount = cleanNum(d['원화배당금']);
+                    if (amount === 0) amount = cleanNum(d['배당금']);
+
+                    return { date: dateStr, ticker: ticker, amount: amount };
+                }).filter(Boolean).filter(d => d.amount > 0);
+                
+                if(parsedTickerData.length > 0) {
+                    updateTickerChartData(parsedTickerData); // 종목별 차트
+
+                    // 월별 & 연도별 집계 로직
+                    const monthlyAgg = {};
+                    const yearlyAgg = {};
+
+                    parsedTickerData.forEach(d => {
+                        const [y, m] = d.date.split('/');
+                        if (y && m) {
+                            const monthKey = `${y}년 ${m}월`;
+                            monthlyAgg[monthKey] = (monthlyAgg[monthKey] || 0) + d.amount;
+                            const yearKey = `${y}년`;
+                            yearlyAgg[yearKey] = (yearlyAgg[yearKey] || 0) + d.amount;
+                        }
+                    });
+
+                    // 월별 차트 
+                    const uniqueMonthKeys = Object.keys(monthlyAgg).sort();
+                    let continuousMonths = [];
+                    let continuousMonthData = [];
+
+                    if (uniqueMonthKeys.length > 0) {
+                        const first = uniqueMonthKeys[0].match(/(\d{4})년 (\d{2})월/);
+                        const last = uniqueMonthKeys[uniqueMonthKeys.length - 1].match(/(\d{4})년 (\d{2})월/);
+
+                        if (first && last) {
+                            let currY = parseInt(first[1], 10);
+                            let currM = parseInt(first[2], 10);
+                            const endY = parseInt(last[1], 10);
+                            const endM = parseInt(last[2], 10);
+
+                            while (currY < endY || (currY === endY && currM <= endM)) {
+                                const key = `${currY}년 ${String(currM).padStart(2, '0')}월`;
+                                continuousMonths.push(key);
+                                continuousMonthData.push(monthlyAgg[key] || 0);
+
+                                currM++;
+                                if (currM > 12) { currM = 1; currY++; }
+                            }
+                        }
+                    }
+                    
+                    monthlyChart.data.labels = continuousMonths;
+                    monthlyChart.data.datasets[0].data = continuousMonthData;
+                    monthlyChart.update();
+
+                    // 연도별 차트
+                    const uniqueYears = Object.keys(yearlyAgg).sort();
+                    yearlyChart.data.labels = uniqueYears;
+                    yearlyChart.data.datasets[0].data = uniqueYears.map(y => yearlyAgg[y]);
+                    yearlyChart.update();
+                }
+            }
+
+            // 4. 종목현황 자산 비중 파싱
+            const allocRawText = await fetchAndParseCSV(CSV_URLS.allocation, "종목현황", true);
+            if (allocRawText) {
+                Papa.parse(allocRawText, {
+                    header: false,
+                    skipEmptyLines: true,
+                    complete: function(results) {
+                        const rows = results.data;
+                        let headerIdx = -1;
+                        let nameCol = -1, amountCol = -1, ratioCol = -1;
+
+                        for (let i = 0; i < Math.min(20, rows.length); i++) {
+                            for (let j = 0; j < rows[i].length; j++) {
+                                const val = String(rows[i][j]).replace(/[^\w가-힣]/g, '');
+                                if (val === '종목명') { headerIdx = i; nameCol = j; }
+                                if (val.includes('평가액')) { amountCol = j; }
+                                if (val.includes('투자비중')) { ratioCol = j; }
+                            }
+                            if (headerIdx !== -1) break;
+                        }
+
+                        if (headerIdx !== -1 && nameCol !== -1) {
+                            const parsedAllocData = [];
+                            
+                            for (let i = headerIdx + 1; i < rows.length; i++) {
+                                const row = rows[i];
+                                if (!row || row.length <= nameCol) continue;
+
+                                const ticker = String(row[nameCol]).trim();
+                                if (!ticker || ticker === '종목명') continue;
+
+                                let ratio = parseFloat(String(row[ratioCol]).replace(/[^0-9.-]/g, ''));
+                                let amount = cleanNum(row[amountCol]);
+
+                                if (isNaN(ratio) || amount <= 0) continue;
+                                parsedAllocData.push({ ticker, amount, ratio });
+                            }
+
+                            if (parsedAllocData.length > 0) {
+                                parsedAllocData.sort((a, b) => b.amount - a.amount);
+                                
+                                allocationChart.data.labels = parsedAllocData.map(d => d.ticker);
+                                allocationChart.data.datasets[0].data = parsedAllocData.map(d => d.amount);
+                                allocationChart.data.datasets[0].ratios = parsedAllocData.map(d => d.ratio);
+                                allocationChart.update();
+
+                                const totalSum = parsedAllocData.reduce((sum, d) => sum + d.amount, 0);
+                                document.getElementById('val-donut-total').innerText = fmt(totalSum) + "원";
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', loadAllData);
+    </script>
+</body>
+</html>
